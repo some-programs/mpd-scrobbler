@@ -1,0 +1,39 @@
+# mpd-scrobbler configuration file
+
+[mpd]
+# MPD connection type: "tcp" or "unix"
+network = "tcp"
+# MPD address: "127.0.0.1:6600" or socket path "/run/mpd/socket"
+address = "127.0.0.1:6600"
+# MPD password (leave blank if password is not configured)
+password = ""
+# Delay between reconnection attempts if MPD disconnects
+reconnect_interval = "5s"
+
+[lastfm]
+# Last.fm API Key and Secret (register at https://www.last.fm/api/account/create)
+api_key = ""
+api_secret = ""
+
+# Session Key obtained via: mpd-scrobbler -lastfm.auth (preferred)
+session_key = ""
+
+# Alternatively, login credentials for mobile session auth (if session_key is empty)
+username = ""
+password = ""
+
+[scrobble]
+# Minimum track duration required to be eligible for scrobbling (default: 30s)
+min_length = "30s"
+# Percentage of the track played required before scrobbling (1-100, default: 50)
+min_percent = 50
+# Maximum playback duration required before scrobbling (default: 4m)
+max_duration = "4m"
+# Send 'Now Playing' updates when a track starts
+now_playing = true
+
+[general]
+# Simulate scrobbler without submitting requests to Last.fm
+dry_run = false
+# Enable verbose debug logs
+verbose = false
