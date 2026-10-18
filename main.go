@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +36,7 @@ func findConfigPath() string {
 }
 
 func main() {
+	runtime.GOMAXPROCS(1)
 	// Pre-load TOML config file if available (from -config flag, CONFIG env, or default paths)
 	specifiedConfigPath := findConfigPath()
 	fileCfg, loadedPath, err := config.LoadFile(specifiedConfigPath)
