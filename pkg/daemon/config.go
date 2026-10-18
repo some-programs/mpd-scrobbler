@@ -41,7 +41,7 @@ func DefaultConfig() Config {
 		},
 		Tracker:        tracker.DefaultConfig(),
 		SendNowPlaying: true,
-		PollInterval:   1 * time.Second,
+		PollInterval:   3 * time.Second,
 		Verbose:        false,
 	}
 }
