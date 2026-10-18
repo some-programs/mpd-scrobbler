@@ -45,30 +45,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Set initial defaults using helper getters from FileConfig (handles root keys & sectioned tables)
-	defaultMPDNetwork := fileCfg.GetMPDNetwork()
-	defaultMPDAddress := fileCfg.GetMPDAddress()
-	defaultMPDPassword := fileCfg.GetMPDPassword()
-	defaultMPDReconnect := fileCfg.GetMPDReconnectInterval()
+	// Set initial defaults from FileConfig
+	defaultMPDNetwork := fileCfg.MPD.Network
+	defaultMPDAddress := fileCfg.MPD.Address
+	defaultMPDPassword := fileCfg.MPD.Password
+	defaultMPDReconnect := fileCfg.MPD.ReconnectInterval.Duration()
 
-	defaultLastfmApiKey := fileCfg.GetAPIKey()
-	defaultLastfmApiSecret := fileCfg.GetAPISecret()
-	defaultLastfmSessionKey := fileCfg.GetSessionKey()
-	defaultLastfmUsername := fileCfg.GetUsername()
-	defaultLastfmPassword := fileCfg.GetPassword()
+	defaultLastfmApiKey := fileCfg.LastFM.APIKey
+	defaultLastfmApiSecret := fileCfg.LastFM.APISecret
+	defaultLastfmSessionKey := fileCfg.LastFM.SessionKey
+	defaultLastfmUsername := fileCfg.LastFM.Username
+	defaultLastfmPassword := fileCfg.LastFM.Password
 
-	defaultScrobbleMinLength := fileCfg.GetScrobbleMinLength()
-	defaultScrobbleMinPercent := fileCfg.GetScrobbleMinPercent()
-	defaultScrobbleMaxDuration := fileCfg.GetScrobbleMaxDuration()
-	defaultScrobbleNowPlaying := fileCfg.GetScrobbleNowPlaying()
-	defaultBacklogFile := fileCfg.GetBacklogFile()
+	defaultScrobbleMinLength := fileCfg.Scrobble.MinLength.Duration()
+	defaultScrobbleMinPercent := fileCfg.Scrobble.MinPercent
+	defaultScrobbleMaxDuration := fileCfg.Scrobble.MaxDuration.Duration()
+	defaultScrobbleNowPlaying := fileCfg.Scrobble.NowPlaying
+	defaultBacklogFile := fileCfg.Scrobble.BacklogFile
 	if defaultBacklogFile == "" {
 		defaultBacklogFile = lastfm.DefaultBacklogPath()
 	}
-	defaultBacklogLimit := fileCfg.GetBacklogLimit()
+	defaultBacklogLimit := fileCfg.Scrobble.BacklogLimit
 
-	defaultDryRun := fileCfg.GetDryRun()
-	defaultVerbose := fileCfg.GetVerbose()
+	defaultDryRun := fileCfg.General.DryRun
+	defaultVerbose := fileCfg.General.Verbose
 
 	// Configuration flags (defaults populated from TOML, overridable by env and CLI flags)
 	_ = flag.String("config", loadedPath, "Path to TOML configuration file")
