@@ -117,3 +117,46 @@ func TestLoadFile_Malformed(t *testing.T) {
 		t.Fatalf("expected error for malformed TOML")
 	}
 }
+
+func TestBacklogLimitConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Test scrobble section backlog_limit = 0
+	content1 := `
+[scrobble]
+backlog_limit = 0
+`
+	f1 := filepath.Join(tmpDir, "c1.toml")
+	if err := os.WriteFile(f1, []byte(content1), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	cfg1, _, err := LoadFile(f1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if limit := cfg1.GetBacklogLimit(); limit != 0 {
+		t.Errorf("expected BacklogLimit 0 from [scrobble], got %d", limit)
+	}
+
+	// Test root-level backlog_limit = 0
+	content2 := `
+backlog_limit = 0
+`
+	f2 := filepath.Join(tmpDir, "c2.toml")
+	if err := os.WriteFile(f2, []byte(content2), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	cfg2, _, err := LoadFile(f2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if limit := cfg2.GetBacklogLimit(); limit != 0 {
+		t.Errorf("expected BacklogLimit 0 from root, got %d", limit)
+	}
+
+	// Test default when omitted
+	cfg3 := &FileConfig{}
+	if limit := cfg3.GetBacklogLimit(); limit != 5000 {
+		t.Errorf("expected default BacklogLimit 5000, got %d", limit)
+	}
+}

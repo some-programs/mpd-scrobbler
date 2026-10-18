@@ -20,35 +20,39 @@ type Client interface {
 	Close() error
 }
 
-// Config contains configuration for Last.fm client authentication and behaviour.
+// Config contains configuration for Last.fm client authentication, backlog, and behaviour.
 type Config struct {
-	APIKey     string
-	APISecret  string
-	SessionKey string
-	Username   string
-	Password   string
-	DryRun     bool
-	Verbose    bool
-	QueueLimit int
-}
-
-type queuedScrobble struct {
-	track     tracker.Track
-	timestamp time.Time
+	APIKey       string
+	APISecret    string
+	SessionKey   string
+	Username     string
+	Password     string
+	DryRun       bool
+	Verbose      bool
+	BacklogFile  string
+	BacklogLimit int
 }
 
 type lastfmClient struct {
 	cfg   Config
 	api   *lastfm.Api
 	mu    sync.Mutex
-	queue []queuedScrobble
+	queue []BacklogItem
 }
 
-// NewClient initializes a new Last.fm client with authentication.
+// NewClient initializes a new Last.fm client with authentication and offline backlog persistence.
 func NewClient(cfg Config) (Client, error) {
+	if cfg.BacklogLimit < 0 {
+		cfg.BacklogLimit = 5000
+	}
+	if cfg.BacklogFile == "" && cfg.BacklogLimit > 0 {
+		cfg.BacklogFile = DefaultBacklogPath()
+	}
+
 	if cfg.DryRun {
 		return &lastfmClient{
-			cfg: cfg,
+			cfg:   cfg,
+			queue: make([]BacklogItem, 0),
 		}, nil
 	}
 
@@ -76,14 +80,26 @@ func NewClient(cfg Config) (Client, error) {
 		return nil, errors.New("no Last.fm credentials provided: specify session-key or username and password (or run with -lastfm.auth to authorize)")
 	}
 
-	if cfg.QueueLimit <= 0 {
-		cfg.QueueLimit = 500
+	// Load existing persistent backlog from disk if enabled
+	var queue []BacklogItem
+	if cfg.BacklogLimit > 0 && cfg.BacklogFile != "" {
+		loaded, err := LoadBacklog(cfg.BacklogFile)
+		if err != nil {
+			if cfg.Verbose {
+				log.Printf("[lastfm] Warning loading backlog: %v", err)
+			}
+		} else if len(loaded) > 0 {
+			log.Printf("[lastfm] Loaded %d pending offline backlog track(s) from %s", len(loaded), cfg.BacklogFile)
+			queue = loaded
+		}
+	} else if cfg.Verbose {
+		log.Println("[lastfm] Offline backlog feature is disabled (limit set to 0)")
 	}
 
 	return &lastfmClient{
 		cfg:   cfg,
 		api:   api,
-		queue: make([]queuedScrobble, 0),
+		queue: queue,
 	}, nil
 }
 
@@ -117,7 +133,9 @@ func (c *lastfmClient) NowPlaying(ctx context.Context, track tracker.Track) erro
 
 	_, err := c.api.Track.UpdateNowPlaying(params)
 	if err != nil {
-		log.Printf("[lastfm] Warning: failed to send Now Playing: %v", err)
+		if c.cfg.Verbose {
+			log.Printf("[lastfm] Warning: failed to send Now Playing: %v", err)
+		}
 		return err
 	}
 
@@ -125,7 +143,7 @@ func (c *lastfmClient) NowPlaying(ctx context.Context, track tracker.Track) erro
 	return nil
 }
 
-// Scrobble sends a 'track.scrobble' request. If it fails, it queues it for retry.
+// Scrobble sends a 'track.scrobble' request. If offline or it fails, it saves to persistent backlog.
 func (c *lastfmClient) Scrobble(ctx context.Context, track tracker.Track, timestamp time.Time) error {
 	if c.cfg.DryRun {
 		log.Printf("[dry-run] Scrobble: %s - %s [%s] (started: %s)",
@@ -133,8 +151,20 @@ func (c *lastfmClient) Scrobble(ctx context.Context, track tracker.Track, timest
 		return nil
 	}
 
-	// Try submitting any previously queued scrobbles first
-	_ = c.FlushQueue(ctx)
+	// If backlog is enabled and there's an existing backlog, try flushing it first
+	if c.cfg.BacklogLimit > 0 {
+		_ = c.FlushQueue(ctx)
+
+		// If backlog couldn't be flushed (still offline), add current track directly to backlog
+		c.mu.Lock()
+		backlogPending := len(c.queue) > 0
+		c.mu.Unlock()
+
+		if backlogPending {
+			c.enqueue(track, timestamp)
+			return errors.New("offline backlog pending, queued scrobble")
+		}
+	}
 
 	params := lastfm.P{
 		"artist":    track.Artist,
@@ -156,8 +186,12 @@ func (c *lastfmClient) Scrobble(ctx context.Context, track tracker.Track, timest
 
 	_, err := c.api.Track.Scrobble(params)
 	if err != nil {
-		log.Printf("[lastfm] Error scrobbling %s - %s: %v. Adding to retry queue.", track.Artist, track.Title, err)
-		c.enqueue(track, timestamp)
+		if c.cfg.BacklogLimit > 0 {
+			log.Printf("[lastfm] Error scrobbling %s - %s: %v. Saving to offline backlog.", track.Artist, track.Title, err)
+			c.enqueue(track, timestamp)
+		} else {
+			log.Printf("[lastfm] Error scrobbling %s - %s: %v. Backlog is disabled, dropping.", track.Artist, track.Title, err)
+		}
 		return err
 	}
 
@@ -166,20 +200,30 @@ func (c *lastfmClient) Scrobble(ctx context.Context, track tracker.Track, timest
 }
 
 func (c *lastfmClient) enqueue(track tracker.Track, timestamp time.Time) {
+	if c.cfg.BacklogLimit <= 0 {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if len(c.queue) >= c.cfg.QueueLimit {
-		// Drop oldest
+	item := BacklogItem{Track: track, Timestamp: timestamp}
+	if len(c.queue) >= c.cfg.BacklogLimit {
+		// Drop oldest beyond limit
 		c.queue = c.queue[1:]
 	}
-	c.queue = append(c.queue, queuedScrobble{track: track, timestamp: timestamp})
-	log.Printf("[lastfm] Scrobble queue contains %d pending track(s)", len(c.queue))
+	c.queue = append(c.queue, item)
+
+	if c.cfg.BacklogFile != "" {
+		if err := AppendBacklog(c.cfg.BacklogFile, item); err != nil && c.cfg.Verbose {
+			log.Printf("[lastfm] Warning: failed to append to backlog file: %v", err)
+		}
+	}
+	log.Printf("[lastfm] Track appended to offline backlog (%d pending in %s)", len(c.queue), c.cfg.BacklogFile)
 }
 
-// FlushQueue attempts to submit all queued scrobbles.
+// FlushQueue attempts to submit all queued backlog scrobbles.
 func (c *lastfmClient) FlushQueue(ctx context.Context) error {
-	if c.cfg.DryRun {
+	if c.cfg.DryRun || c.cfg.BacklogLimit <= 0 {
 		return nil
 	}
 
@@ -188,55 +232,84 @@ func (c *lastfmClient) FlushQueue(ctx context.Context) error {
 		c.mu.Unlock()
 		return nil
 	}
-	pending := make([]queuedScrobble, len(c.queue))
+	pending := make([]BacklogItem, len(c.queue))
 	copy(pending, c.queue)
-	c.queue = c.queue[:0]
 	c.mu.Unlock()
 
-	var remaining []queuedScrobble
-	for _, item := range pending {
+	var remaining []BacklogItem
+	submittedCount := 0
+
+	for i, item := range pending {
+		select {
+		case <-ctx.Done():
+			remaining = append(remaining, pending[i:]...)
+			break
+		default:
+		}
+		if len(remaining) > 0 {
+			break
+		}
+
 		params := lastfm.P{
-			"artist":    item.track.Artist,
-			"track":     item.track.Title,
-			"timestamp": item.timestamp.Unix(),
+			"artist":    item.Track.Artist,
+			"track":     item.Track.Title,
+			"timestamp": item.Timestamp.Unix(),
 		}
-		if item.track.Album != "" {
-			params["album"] = item.track.Album
+		if item.Track.Album != "" {
+			params["album"] = item.Track.Album
 		}
-		if item.track.AlbumArtist != "" {
-			params["albumArtist"] = item.track.AlbumArtist
+		if item.Track.AlbumArtist != "" {
+			params["albumArtist"] = item.Track.AlbumArtist
 		}
-		if item.track.TrackNumber > 0 {
-			params["trackNumber"] = item.track.TrackNumber
+		if item.Track.TrackNumber > 0 {
+			params["trackNumber"] = item.Track.TrackNumber
 		}
-		if item.track.Duration > 0 {
-			params["duration"] = int(item.track.Duration.Seconds())
+		if item.Track.Duration > 0 {
+			params["duration"] = int(item.Track.Duration.Seconds())
 		}
 
 		_, err := c.api.Track.Scrobble(params)
 		if err != nil {
-			log.Printf("[lastfm] Retry failed for %s - %s: %v", item.track.Artist, item.track.Title, err)
-			remaining = append(remaining, item)
-		} else {
-			log.Printf("[lastfm] Queued scrobble submitted: %s - %s", item.track.Artist, item.track.Title)
+			// Network error or offline: stop flushing and keep remaining tracks on disk
+			if c.cfg.Verbose {
+				log.Printf("[lastfm] Backlog submission paused at %s - %s: %v", item.Track.Artist, item.Track.Title, err)
+			}
+			remaining = append(remaining, pending[i:]...)
+			break
 		}
+
+		submittedCount++
 	}
 
-	if len(remaining) > 0 {
-		c.mu.Lock()
-		c.queue = append(remaining, c.queue...)
-		if len(c.queue) > c.cfg.QueueLimit {
-			c.queue = c.queue[len(c.queue)-c.cfg.QueueLimit:]
-		}
-		c.mu.Unlock()
+	c.mu.Lock()
+	c.queue = remaining
+	if c.cfg.BacklogFile != "" {
+		_ = RewriteBacklog(c.cfg.BacklogFile, c.queue)
+	}
+	c.mu.Unlock()
+
+	if submittedCount > 0 {
+		log.Printf("[lastfm] Backlog flush: submitted %d track(s) to Last.fm (%d still pending)",
+			submittedCount, len(remaining))
 	}
 
 	return nil
 }
 
-// Close flushes any pending scrobbles upon shutdown.
+// Close flushes any pending scrobbles and persists the backlog upon shutdown.
 func (c *lastfmClient) Close() error {
+	if c.cfg.BacklogLimit <= 0 {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return c.FlushQueue(ctx)
+
+	_ = c.FlushQueue(ctx)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cfg.BacklogFile != "" {
+		_ = RewriteBacklog(c.cfg.BacklogFile, c.queue)
+	}
+	return nil
 }

@@ -59,6 +59,11 @@ func main() {
 	defaultScrobbleMinPercent := fileCfg.GetScrobbleMinPercent()
 	defaultScrobbleMaxDuration := fileCfg.GetScrobbleMaxDuration()
 	defaultScrobbleNowPlaying := fileCfg.GetScrobbleNowPlaying()
+	defaultBacklogFile := fileCfg.GetBacklogFile()
+	if defaultBacklogFile == "" {
+		defaultBacklogFile = lastfm.DefaultBacklogPath()
+	}
+	defaultBacklogLimit := fileCfg.GetBacklogLimit()
 
 	defaultDryRun := fileCfg.GetDryRun()
 	defaultVerbose := fileCfg.GetVerbose()
@@ -85,6 +90,8 @@ func main() {
 	scrobbleMinPercent := flag.Int("scrobble.min-percent", defaultScrobbleMinPercent, "Percentage of song length required before scrobbling (1-100)")
 	scrobbleMaxDuration := flag.Duration("scrobble.max-duration", defaultScrobbleMaxDuration, "Maximum playback time required before scrobbling")
 	scrobbleNowPlaying := flag.Bool("scrobble.now-playing", defaultScrobbleNowPlaying, "Send 'Now Playing' notifications to Last.fm")
+	scrobbleBacklogFile := flag.String("scrobble.backlog-file", defaultBacklogFile, "Path to persistent offline scrobble backlog file")
+	scrobbleBacklogLimit := flag.Int("scrobble.backlog-limit", defaultBacklogLimit, "Maximum number of scrobbles to retain in offline backlog")
 
 	// Operational flags
 	dryRun := flag.Bool("dry-run", defaultDryRun, "Simulate tracking and scrobbling without sending requests to Last.fm")
@@ -107,14 +114,15 @@ func main() {
 	}
 
 	lastfmCfg := lastfm.Config{
-		APIKey:     *lastfmApiKey,
-		APISecret:  *lastfmApiSecret,
-		SessionKey: *lastfmSessionKey,
-		Username:   *lastfmUsername,
-		Password:   *lastfmPassword,
-		DryRun:     *dryRun,
-		Verbose:    *verbose,
-		QueueLimit: 500,
+		APIKey:       *lastfmApiKey,
+		APISecret:    *lastfmApiSecret,
+		SessionKey:   *lastfmSessionKey,
+		Username:     *lastfmUsername,
+		Password:     *lastfmPassword,
+		DryRun:       *dryRun,
+		Verbose:      *verbose,
+		BacklogFile:  *scrobbleBacklogFile,
+		BacklogLimit: *scrobbleBacklogLimit,
 	}
 
 	scrobblerClient, err := lastfm.NewClient(lastfmCfg)

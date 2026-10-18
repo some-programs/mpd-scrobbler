@@ -35,9 +35,9 @@ func DefaultConfig() Config {
 		MPDPassword:          "",
 		MPDReconnectInterval: 5 * time.Second,
 		LastFM: lastfm.Config{
-			DryRun:     false,
-			Verbose:    false,
-			QueueLimit: 500,
+			DryRun:       false,
+			Verbose:      false,
+			BacklogLimit: 5000,
 		},
 		Tracker:        tracker.DefaultConfig(),
 		SendNowPlaying: true,

@@ -30,25 +30,29 @@ func (d Duration) Duration() time.Duration {
 // FileConfig defines the TOML file structure supporting both root-level keys and section tables.
 type FileConfig struct {
 	// Root-level fields (convenience for flat config files)
-	APIKey           *string `toml:"api_key"`
-	APIKeyHyphen     *string `toml:"api-key"`
-	APIKeyPlain      *string `toml:"apikey"`
-	APISecret        *string `toml:"api_secret"`
-	APISecretHyphen  *string `toml:"api-secret"`
-	APISecretPlain   *string `toml:"apisecret"`
-	SessionKey       *string `toml:"session_key"`
-	SessionKeyHyphen *string `toml:"session-key"`
-	SessionKeyPlain  *string `toml:"sessionkey"`
-	Username         *string `toml:"username"`
-	Password         *string `toml:"password"`
-	Address          *string `toml:"address"`
-	MPDAddress       *string `toml:"mpd_address"`
-	MPDAddressHyphen *string `toml:"mpd-address"`
-	Network          *string `toml:"network"`
-	MPDNetwork       *string `toml:"mpd_network"`
-	MPDNetworkHyphen *string `toml:"mpd-network"`
-	DryRun           *bool   `toml:"dry_run"`
-	Verbose          *bool   `toml:"verbose"`
+	APIKey             *string `toml:"api_key"`
+	APIKeyHyphen       *string `toml:"api-key"`
+	APIKeyPlain        *string `toml:"apikey"`
+	APISecret          *string `toml:"api_secret"`
+	APISecretHyphen    *string `toml:"api-secret"`
+	APISecretPlain     *string `toml:"apisecret"`
+	SessionKey         *string `toml:"session_key"`
+	SessionKeyHyphen   *string `toml:"session-key"`
+	SessionKeyPlain    *string `toml:"sessionkey"`
+	Username           *string `toml:"username"`
+	Password           *string `toml:"password"`
+	Address            *string `toml:"address"`
+	MPDAddress         *string `toml:"mpd_address"`
+	MPDAddressHyphen   *string `toml:"mpd-address"`
+	Network            *string `toml:"network"`
+	MPDNetwork         *string `toml:"mpd_network"`
+	MPDNetworkHyphen   *string `toml:"mpd-network"`
+	BacklogFile        *string `toml:"backlog_file"`
+	BacklogFileHyphen  *string `toml:"backlog-file"`
+	BacklogLimit       *int    `toml:"backlog_limit"`
+	BacklogLimitHyphen *int    `toml:"backlog-limit"`
+	DryRun             *bool   `toml:"dry_run"`
+	Verbose            *bool   `toml:"verbose"`
 
 	MPD struct {
 		Network                 *string   `toml:"network"`
@@ -73,14 +77,18 @@ type FileConfig struct {
 	} `toml:"lastfm"`
 
 	Scrobble struct {
-		MinLength         *Duration `toml:"min_length"`
-		MinLengthHyphen   *Duration `toml:"min-length"`
-		MinPercent        *int      `toml:"min_percent"`
-		MinPercentHyphen  *int      `toml:"min-percent"`
-		MaxDuration       *Duration `toml:"max_duration"`
-		MaxDurationHyphen *Duration `toml:"max-duration"`
-		NowPlaying        *bool     `toml:"now_playing"`
-		NowPlayingHyphen  *bool     `toml:"now-playing"`
+		MinLength          *Duration `toml:"min_length"`
+		MinLengthHyphen    *Duration `toml:"min-length"`
+		MinPercent         *int      `toml:"min_percent"`
+		MinPercentHyphen   *int      `toml:"min-percent"`
+		MaxDuration        *Duration `toml:"max_duration"`
+		MaxDurationHyphen  *Duration `toml:"max-duration"`
+		NowPlaying         *bool     `toml:"now_playing"`
+		NowPlayingHyphen   *bool     `toml:"now-playing"`
+		BacklogFile        *string   `toml:"backlog_file"`
+		BacklogFileHyphen  *string   `toml:"backlog-file"`
+		BacklogLimit       *int      `toml:"backlog_limit"`
+		BacklogLimitHyphen *int      `toml:"backlog-limit"`
 	} `toml:"scrobble"`
 
 	General struct {
@@ -230,6 +238,24 @@ func (c *FileConfig) GetVerbose() bool {
 		}
 	}
 	return false
+}
+
+func (c *FileConfig) GetBacklogFile() string {
+	for _, val := range []*string{c.Scrobble.BacklogFile, c.Scrobble.BacklogFileHyphen, c.BacklogFile, c.BacklogFileHyphen} {
+		if val != nil && *val != "" {
+			return *val
+		}
+	}
+	return ""
+}
+
+func (c *FileConfig) GetBacklogLimit() int {
+	for _, val := range []*int{c.Scrobble.BacklogLimit, c.Scrobble.BacklogLimitHyphen, c.BacklogLimit, c.BacklogLimitHyphen} {
+		if val != nil && *val >= 0 {
+			return *val
+		}
+	}
+	return 5000
 }
 
 // DefaultConfigPath returns the default configuration path in XDG_CONFIG_HOME or ~/.config.

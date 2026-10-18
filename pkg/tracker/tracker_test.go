@@ -298,4 +298,3 @@ func TestTracker_DurationFallbackFromStatus(t *testing.T) {
 		t.Fatalf("expected track to be scrobbled at 50s with fallback duration")
 	}
 }
-

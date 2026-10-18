@@ -31,6 +31,10 @@ min_percent = 50
 max_duration = "4m"
 # Send 'Now Playing' updates when a track starts
 now_playing = true
+# Persistent offline append-only backlog file path (default: ~/.local/state/mpd-scrobbler/backlog.jsonl)
+# backlog_file = "~/.local/state/mpd-scrobbler/backlog.jsonl"
+# Maximum offline scrobbles to store on disk (default: 5000, set to 0 to disable backlog)
+# backlog_limit = 5000
 
 [general]
 # Simulate scrobbler without submitting requests to Last.fm

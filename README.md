@@ -75,6 +75,8 @@ verbose = false
 | `-scrobble.min-percent`   | `SCROBBLE_MIN_PERCENT`   | `scrobble.min_percent`   | `50`                                  | Required percentage of track played (1-100)      |
 | `-scrobble.max-duration`  | `SCROBBLE_MAX_DURATION`  | `scrobble.max_duration`  | `4m0s`                                | Maximum listen duration before scrobbling        |
 | `-scrobble.now-playing`   | `SCROBBLE_NOW_PLAYING`   | `scrobble.now_playing`   | `true`                                | Send 'Now Playing' updates                       |
+| `-scrobble.backlog-file`  | `SCROBBLE_BACKLOG_FILE`  | `scrobble.backlog_file`  | `~/.local/state/mpd-scrobbler/backlog.jsonl` | Persistent offline append-only backlog file path |
+| `-scrobble.backlog-limit` | `SCROBBLE_BACKLOG_LIMIT` | `scrobble.backlog_limit` | `5000`                                | Max offline tracks to store (0 to disable)       |
 | `-dry-run`                | `DRY_RUN`                | `general.dry_run`        | `false`                               | Test scrobbling logic without contacting Last.fm |
 | `-verbose`                | `VERBOSE`                | `general.verbose`        | `false`                               | Enable verbose logging                           |
 

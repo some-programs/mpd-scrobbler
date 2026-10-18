@@ -2,6 +2,8 @@ package lastfm
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -59,11 +61,15 @@ func TestNewClient_MissingCredentials(t *testing.T) {
 }
 
 func TestQueueEnqueue(t *testing.T) {
+	tmpDir := t.TempDir()
+	backlogFile := filepath.Join(tmpDir, "backlog.json")
+
 	c := &lastfmClient{
 		cfg: Config{
-			QueueLimit: 2,
+			BacklogLimit: 2,
+			BacklogFile:  backlogFile,
 		},
-		queue: make([]queuedScrobble, 0),
+		queue: make([]BacklogItem, 0),
 	}
 
 	t1 := tracker.Track{Artist: "Artist1", Title: "Track1"}
@@ -81,7 +87,52 @@ func TestQueueEnqueue(t *testing.T) {
 	if len(c.queue) != 2 {
 		t.Fatalf("expected queue length 2 after dropping oldest, got %d", len(c.queue))
 	}
-	if c.queue[0].track.Title != "Track2" || c.queue[1].track.Title != "Track3" {
+	if c.queue[0].Track.Title != "Track2" || c.queue[1].Track.Title != "Track3" {
 		t.Errorf("queue order incorrect: %+v", c.queue)
+	}
+
+	// Verify items were appended to disk file
+	loaded, err := LoadBacklog(backlogFile)
+	if err != nil {
+		t.Fatalf("failed to load saved backlog: %v", err)
+	}
+	if len(loaded) != 3 || loaded[2].Track.Title != "Track3" {
+		t.Errorf("persisted file mismatch: %+v", loaded)
+	}
+}
+
+func TestBacklogDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	backlogFile := filepath.Join(tmpDir, "backlog.jsonl")
+
+	c := &lastfmClient{
+		cfg: Config{
+			BacklogLimit: 0,
+			BacklogFile:  backlogFile,
+		},
+		queue: make([]BacklogItem, 0),
+	}
+
+	tr := tracker.Track{Artist: "Artist", Title: "Track"}
+	c.enqueue(tr, time.Now())
+
+	if len(c.queue) != 0 {
+		t.Fatalf("expected queue length 0 when backlog disabled, got %d", len(c.queue))
+	}
+
+	if _, err := os.Stat(backlogFile); !os.IsNotExist(err) {
+		t.Fatalf("expected backlog file not to exist when backlog disabled")
+	}
+
+	if err := c.FlushQueue(context.Background()); err != nil {
+		t.Errorf("expected FlushQueue to return nil when disabled, got: %v", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Errorf("expected Close to return nil when disabled, got: %v", err)
+	}
+
+	if _, err := os.Stat(backlogFile); !os.IsNotExist(err) {
+		t.Fatalf("expected backlog file not to be created on Close when backlog disabled")
 	}
 }
